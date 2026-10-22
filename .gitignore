@@ -1,0 +1,39 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Data: the combined corpus is far too large for GitHub
+combined_data.csv
+data/
+*.sqlite3
+db.sqlite3
+
+# Model logs (the small production artifact and metrics ARE tracked)
+ml/artifacts/*.log
+*.log
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+*.local
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!frontend/.env.example
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Internal planning document
+build_plan.md
