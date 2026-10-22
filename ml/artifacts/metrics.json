@@ -1,0 +1,541 @@
+{
+  "version": "2.0.0",
+  "trained_at": "2026-10-22T18:50:24+00:00",
+  "training_seconds": 638.4,
+  "dataset": {
+    "source": "D:\\Code-Base\\Git-Clones\\Spam-classifire\\combined_data.csv",
+    "rows_loaded": 83448,
+    "rows_clean": 76127,
+    "exact_duplicates_removed": 697,
+    "near_duplicates_removed": 6591,
+    "label_counts": {
+      "ham": 36850,
+      "spam": 39277
+    },
+    "text_length": {
+      "mean": 1481.0,
+      "median": 824,
+      "p95": 4623,
+      "max": 20000
+    },
+    "max_chars": 20000
+  },
+  "split": {
+    "train": 60901,
+    "validation": 7613,
+    "test": 7613
+  },
+  "preprocessing": {
+    "max_chars": 20000,
+    "deduplication": "exact + SimHash Hamming<=3 (LSH banded)",
+    "stop_words": false,
+    "lowercase": true
+  },
+  "features": {
+    "word_tfidf": {
+      "ngram_range": [
+        1,
+        2
+      ],
+      "max_features": 150000,
+      "min_df": 2,
+      "sublinear_tf": true
+    },
+    "char_tfidf": {
+      "analyzer": "char_wb",
+      "ngram_range": [
+        3,
+        5
+      ],
+      "max_features": 80000,
+      "min_df": 5,
+      "max_chars": 4000
+    },
+    "text_stats": [
+      "log_chars",
+      "log_words",
+      "avg_word_len",
+      "max_word_len",
+      "unique_word_ratio",
+      "digit_ratio",
+      "uppercase_ratio",
+      "punctuation_ratio",
+      "non_ascii_ratio",
+      "exclamation_per_kchar",
+      "question_per_kchar",
+      "dollar_per_kchar",
+      "percent_per_kchar",
+      "url_count",
+      "email_address_count",
+      "html_tag_count",
+      "number_token_ratio",
+      "caps_word_ratio",
+      "log_lines",
+      "repeated_punctuation",
+      "urgency_hits",
+      "money_hits",
+      "marketing_hits"
+    ]
+  },
+  "model": {
+    "family": "LogisticRegression",
+    "params": {
+      "C": 2.0,
+      "solver": "liblinear",
+      "max_iter": 2000
+    },
+    "threshold": 0.7104,
+    "threshold_rule": "maximise F0.5 on validation (precision weighted)"
+  },
+  "validation": {
+    "threshold": 0.7104,
+    "at_tuned_threshold": {
+      "threshold": 0.7104,
+      "accuracy": 0.9886,
+      "precision": 0.9913,
+      "recall": 0.9865,
+      "f1": 0.9889,
+      "f0_5": 0.9903,
+      "roc_auc": 0.9988,
+      "average_precision": 0.9986,
+      "brier": 0.01,
+      "confusion_matrix": {
+        "tn": 3651,
+        "fp": 34,
+        "fn": 53,
+        "tp": 3875
+      },
+      "false_positive_rate": 0.0092,
+      "false_negative_rate": 0.0135,
+      "support": {
+        "ham": 3685,
+        "spam": 3928
+      }
+    },
+    "at_0.5": {
+      "threshold": 0.5,
+      "accuracy": 0.9895,
+      "precision": 0.9834,
+      "recall": 0.9964,
+      "f1": 0.9899,
+      "f0_5": 0.986,
+      "roc_auc": 0.9988,
+      "average_precision": 0.9986,
+      "brier": 0.01,
+      "confusion_matrix": {
+        "tn": 3619,
+        "fp": 66,
+        "fn": 14,
+        "tp": 3914
+      },
+      "false_positive_rate": 0.0179,
+      "false_negative_rate": 0.0036,
+      "support": {
+        "ham": 3685,
+        "spam": 3928
+      }
+    }
+  },
+  "test": {
+    "threshold": 0.7104,
+    "at_tuned_threshold": {
+      "threshold": 0.7104,
+      "accuracy": 0.9883,
+      "precision": 0.9951,
+      "recall": 0.9822,
+      "f1": 0.9886,
+      "f0_5": 0.9925,
+      "roc_auc": 0.9993,
+      "average_precision": 0.9992,
+      "brier": 0.0089,
+      "confusion_matrix": {
+        "tn": 3666,
+        "fp": 19,
+        "fn": 70,
+        "tp": 3858
+      },
+      "false_positive_rate": 0.0052,
+      "false_negative_rate": 0.0178,
+      "support": {
+        "ham": 3685,
+        "spam": 3928
+      }
+    },
+    "at_0.5": {
+      "threshold": 0.5,
+      "accuracy": 0.9896,
+      "precision": 0.9856,
+      "recall": 0.9944,
+      "f1": 0.99,
+      "f0_5": 0.9874,
+      "roc_auc": 0.9993,
+      "average_precision": 0.9992,
+      "brier": 0.0089,
+      "confusion_matrix": {
+        "tn": 3628,
+        "fp": 57,
+        "fn": 22,
+        "tp": 3906
+      },
+      "false_positive_rate": 0.0155,
+      "false_negative_rate": 0.0056,
+      "support": {
+        "ham": 3685,
+        "spam": 3928
+      }
+    }
+  },
+  "comparison": [
+    {
+      "name": "LogisticRegression",
+      "params": {
+        "C": 4.0,
+        "solver": "liblinear",
+        "max_iter": 2000
+      },
+      "threshold": 0.7597,
+      "precision": 0.9931,
+      "recall": 0.9837,
+      "f1": 0.9884,
+      "f0_5": 0.9912,
+      "average_precision": 0.9986,
+      "roc_auc": 0.9989,
+      "fit_seconds": 28.8
+    },
+    {
+      "name": "CalibratedLinearSVC",
+      "params": {
+        "C": 0.5,
+        "calibration_cv": 3
+      },
+      "threshold": 0.7515,
+      "precision": 0.9933,
+      "recall": 0.9885,
+      "f1": 0.9909,
+      "f0_5": 0.9924,
+      "average_precision": 0.9983,
+      "roc_auc": 0.9989,
+      "fit_seconds": 10.16
+    },
+    {
+      "name": "ComplementNB",
+      "params": {
+        "alpha": 0.3
+      },
+      "threshold": 0.7455,
+      "precision": 0.9885,
+      "recall": 0.9603,
+      "f1": 0.9742,
+      "f0_5": 0.9827,
+      "average_precision": 0.9958,
+      "roc_auc": 0.9968,
+      "fit_seconds": 0.18
+    }
+  ],
+  "tuning": [
+    {
+      "params": {
+        "C": 0.5,
+        "solver": "liblinear",
+        "max_iter": 2000
+      },
+      "threshold": 0.6567,
+      "average_precision": 0.9983,
+      "f0_5": 0.9875,
+      "f1": 0.9861,
+      "precision": 0.9885,
+      "recall": 0.9837,
+      "fit_seconds": 20.63
+    },
+    {
+      "params": {
+        "C": 1.0,
+        "solver": "liblinear",
+        "max_iter": 2000
+      },
+      "threshold": 0.7091,
+      "average_precision": 0.9985,
+      "f0_5": 0.9889,
+      "f1": 0.9861,
+      "precision": 0.9907,
+      "recall": 0.9814,
+      "fit_seconds": 24.75
+    },
+    {
+      "params": {
+        "C": 2.0,
+        "solver": "liblinear",
+        "max_iter": 2000
+      },
+      "threshold": 0.7104,
+      "average_precision": 0.9986,
+      "f0_5": 0.9903,
+      "f1": 0.9889,
+      "precision": 0.9913,
+      "recall": 0.9865,
+      "fit_seconds": 20.1
+    },
+    {
+      "params": {
+        "C": 4.0,
+        "solver": "liblinear",
+        "max_iter": 2000
+      },
+      "threshold": 0.7597,
+      "average_precision": 0.9986,
+      "f0_5": 0.9912,
+      "f1": 0.9884,
+      "precision": 0.9931,
+      "recall": 0.9837,
+      "fit_seconds": 24.38
+    },
+    {
+      "params": {
+        "C": 8.0,
+        "solver": "liblinear",
+        "max_iter": 2000
+      },
+      "threshold": 0.788,
+      "average_precision": 0.9986,
+      "f0_5": 0.9919,
+      "f1": 0.9891,
+      "precision": 0.9938,
+      "recall": 0.9845,
+      "fit_seconds": 27.19
+    },
+    {
+      "params": {
+        "C": 16.0,
+        "solver": "liblinear",
+        "max_iter": 2000
+      },
+      "threshold": 0.7131,
+      "average_precision": 0.9986,
+      "f0_5": 0.9924,
+      "f1": 0.9924,
+      "precision": 0.9924,
+      "recall": 0.9924,
+      "fit_seconds": 31.61
+    }
+  ],
+  "ablation": {
+    "word_only": {
+      "threshold": 0.7662,
+      "accuracy": 0.9848,
+      "precision": 0.9923,
+      "recall": 0.9781,
+      "f1": 0.9851,
+      "f0_5": 0.9894,
+      "roc_auc": 0.9986,
+      "average_precision": 0.9972,
+      "brier": 0.0106,
+      "confusion_matrix": {
+        "tn": 3655,
+        "fp": 30,
+        "fn": 86,
+        "tp": 3842
+      },
+      "false_positive_rate": 0.0081,
+      "false_negative_rate": 0.0219,
+      "support": {
+        "ham": 3685,
+        "spam": 3928
+      },
+      "feature_count": 150000
+    },
+    "full_feature_union": {
+      "feature_count": 230023,
+      "average_precision": 0.9986,
+      "f0_5": 0.9903
+    }
+  },
+  "top_features": {
+    "spam": [
+      {
+        "word": "stat:unique_word_ratio",
+        "weight": 7.5317
+      },
+      {
+        "word": "your",
+        "weight": 4.2934
+      },
+      {
+        "word": "stat:avg_word_len",
+        "weight": 3.7718
+      },
+      {
+        "word": "2005",
+        "weight": 3.6809
+      },
+      {
+        "word": "2004",
+        "weight": 3.5218
+      },
+      {
+        "word": "info",
+        "weight": 3.4847
+      },
+      {
+        "word": "hk",
+        "weight": 3.0245
+      },
+      {
+        "word": "you",
+        "weight": 2.9909
+      },
+      {
+        "word": "no",
+        "weight": 2.9162
+      },
+      {
+        "word": "he",
+        "weight": 2.7674
+      },
+      {
+        "word": "http",
+        "weight": 2.6941
+      },
+      {
+        "word": "stat:non_ascii_ratio",
+        "weight": 2.6278
+      },
+      {
+        "word": "life",
+        "weight": 2.5695
+      },
+      {
+        "word": "com",
+        "weight": 2.5099
+      },
+      {
+        "word": "man",
+        "weight": 2.3665
+      },
+      {
+        "word": "his",
+        "weight": 2.3594
+      },
+      {
+        "word": "our",
+        "weight": 2.3387
+      },
+      {
+        "word": "net",
+        "weight": 2.3157
+      },
+      {
+        "word": "men",
+        "weight": 2.282
+      },
+      {
+        "word": "~ ! ",
+        "weight": 2.2275
+      }
+    ],
+    "ham": [
+      {
+        "word": "stat:number_token_ratio",
+        "weight": -3.45
+      },
+      {
+        "word": "gas",
+        "weight": -3.6478
+      },
+      {
+        "word": "samba",
+        "weight": -3.6794
+      },
+      {
+        "word": "2001",
+        "weight": -3.7201
+      },
+      {
+        "word": "to",
+        "weight": -3.7214
+      },
+      {
+        "word": "lists",
+        "weight": -3.8131
+      },
+      {
+        "word": "on",
+        "weight": -3.8532
+      },
+      {
+        "word": "the",
+        "weight": -3.8855
+      },
+      {
+        "word": "debian",
+        "weight": -3.9879
+      },
+      {
+        "word": "louise",
+        "weight": -4.0944
+      },
+      {
+        "word": "doc",
+        "weight": -4.1446
+      },
+      {
+        "word": "attached",
+        "weight": -4.229
+      },
+      {
+        "word": "~ i ",
+        "weight": -4.7569
+      },
+      {
+        "word": "perl",
+        "weight": -4.7676
+      },
+      {
+        "word": "thanks",
+        "weight": -5.0611
+      },
+      {
+        "word": "escapenumber escapenumber",
+        "weight": -5.3333
+      },
+      {
+        "word": "vince",
+        "weight": -5.6661
+      },
+      {
+        "word": "wrote",
+        "weight": -6.6268
+      },
+      {
+        "word": "~ . ",
+        "weight": -7.0606
+      },
+      {
+        "word": "enron",
+        "weight": -7.7098
+      }
+    ]
+  },
+  "confusion_matrix": {
+    "tn": 3666,
+    "fp": 19,
+    "fn": 70,
+    "tp": 3858
+  },
+  "latency_ms_per_email": 1.9,
+  "feature_seconds": 196.7,
+  "final_fit_seconds": 184.1,
+  "libraries": {
+    "scikit-learn": "1.9.1",
+    "numpy": "2.5.4",
+    "python": "3.13.3"
+  },
+  "notes": [
+    "Models and thresholds were selected with training-fold vectorizers only; the final artifact was refit on train + validation. Test data was never seen during training or threshold tuning.",
+    "The decision threshold maximises F0.5 on validation, deliberately trading a little recall for fewer false positives.",
+    "Accuracy alone is misleading on imbalanced mail; precision, recall, and the confusion matrix are reported."
+  ],
+  "artifact": {
+    "path": "spam_pipeline.joblib",
+    "size_mb": 4.15
+  }
+}
