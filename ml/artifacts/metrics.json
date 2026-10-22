@@ -1,7 +1,7 @@
 {
   "version": "2.0.0",
-  "trained_at": "2026-10-22T18:50:24+00:00",
-  "training_seconds": 638.4,
+  "trained_at": "2026-10-22T20:20:04+00:00",
+  "training_seconds": 482.6,
   "dataset": {
     "source": "D:\\Code-Base\\Git-Clones\\Spam-classifire\\combined_data.csv",
     "rows_loaded": 83448,
@@ -200,7 +200,7 @@
       "f0_5": 0.9912,
       "average_precision": 0.9986,
       "roc_auc": 0.9989,
-      "fit_seconds": 28.8
+      "fit_seconds": 22.38
     },
     {
       "name": "CalibratedLinearSVC",
@@ -215,7 +215,7 @@
       "f0_5": 0.9924,
       "average_precision": 0.9983,
       "roc_auc": 0.9989,
-      "fit_seconds": 10.16
+      "fit_seconds": 9.72
     },
     {
       "name": "ComplementNB",
@@ -229,7 +229,7 @@
       "f0_5": 0.9827,
       "average_precision": 0.9958,
       "roc_auc": 0.9968,
-      "fit_seconds": 0.18
+      "fit_seconds": 0.22
     }
   ],
   "tuning": [
@@ -245,7 +245,7 @@
       "f1": 0.9861,
       "precision": 0.9885,
       "recall": 0.9837,
-      "fit_seconds": 20.63
+      "fit_seconds": 13.89
     },
     {
       "params": {
@@ -259,7 +259,7 @@
       "f1": 0.9861,
       "precision": 0.9907,
       "recall": 0.9814,
-      "fit_seconds": 24.75
+      "fit_seconds": 16.14
     },
     {
       "params": {
@@ -273,7 +273,7 @@
       "f1": 0.9889,
       "precision": 0.9913,
       "recall": 0.9865,
-      "fit_seconds": 20.1
+      "fit_seconds": 17.4
     },
     {
       "params": {
@@ -287,7 +287,7 @@
       "f1": 0.9884,
       "precision": 0.9931,
       "recall": 0.9837,
-      "fit_seconds": 24.38
+      "fit_seconds": 21.74
     },
     {
       "params": {
@@ -301,7 +301,7 @@
       "f1": 0.9891,
       "precision": 0.9938,
       "recall": 0.9845,
-      "fit_seconds": 27.19
+      "fit_seconds": 22.82
     },
     {
       "params": {
@@ -315,7 +315,7 @@
       "f1": 0.9924,
       "precision": 0.9924,
       "recall": 0.9924,
-      "fit_seconds": 31.61
+      "fit_seconds": 27.24
     }
   ],
   "ablation": {
@@ -521,9 +521,9 @@
     "fn": 70,
     "tp": 3858
   },
-  "latency_ms_per_email": 1.9,
-  "feature_seconds": 196.7,
-  "final_fit_seconds": 184.1,
+  "latency_ms_per_email": 1.68,
+  "feature_seconds": 117.3,
+  "final_fit_seconds": 155.2,
   "libraries": {
     "scikit-learn": "1.9.1",
     "numpy": "2.5.4",
