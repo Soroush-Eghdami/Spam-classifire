@@ -1,10 +1,4 @@
-"""Model lifecycle and prediction service.
-
-The artifact is loaded **once per worker** and reused.  Loading a joblib file
-on every request would add hundreds of milliseconds and waste memory; loading
-it in ``AppConfig.ready`` would slow down management commands, so the model is
-created lazily and guarded by a lock.
-"""
+"""Load the model once per worker and serve predictions."""
 
 from __future__ import annotations
 
@@ -20,7 +14,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-# Ensure ``ml`` is importable when the backend runs from /backend.
+# Let the backend import the shared ml/ package.
 _PROJECT_ROOT = Path(settings.BASE_DIR).parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
@@ -29,11 +23,11 @@ from ml import predict as ml_predict  # noqa: E402  (path setup must run first)
 
 
 class ModelNotReadyError(RuntimeError):
-    """Raised when the artifact is missing or cannot be unpickled."""
+    """Raised when the model file is missing or broken."""
 
 
 def make_preview(text: str, limit: int | None = None) -> str:
-    """Collapse whitespace and truncate for safe storage/display."""
+    """Shorten text for storage and display."""
 
     limit = limit or settings.MAX_PREVIEW_CHARS
     collapsed = " ".join(str(text).split())
@@ -43,7 +37,7 @@ def make_preview(text: str, limit: int | None = None) -> str:
 
 
 class ModelService:
-    """Thread-safe singleton wrapper around the saved scikit-learn pipeline."""
+    """Thread-safe wrapper around the loaded model."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -53,7 +47,7 @@ class ModelService:
         self._loaded_at: float | None = None
         self._load_error: str | None = None
 
-    # -- lifecycle ---------------------------------------------------------
+    # Lifecycle
     @property
     def is_loaded(self) -> bool:
         return self._pipeline is not None
@@ -63,7 +57,7 @@ class ModelService:
         return self._loaded_at
 
     def reset(self) -> None:
-        """Drop cached state (used by tests after swapping MODEL_PATH)."""
+        """Clear cached model and metrics."""
 
         with self._lock:
             self._pipeline = None
@@ -77,13 +71,13 @@ class ModelService:
             return self._pipeline
 
         with self._lock:
-            if self._pipeline is not None:  # double-checked locking
+            if self._pipeline is not None:
                 return self._pipeline
 
             started = time.perf_counter()
             try:
                 pipeline = ml_predict.load_model(settings.MODEL_PATH)
-            except Exception as exc:  # noqa: BLE001 - surface a clear 503
+            except Exception as exc:  # noqa: BLE001
                 self._load_error = str(exc)
                 logger.exception("Could not load model from %s", settings.MODEL_PATH)
                 raise ModelNotReadyError(
@@ -102,9 +96,9 @@ class ModelService:
             )
             return pipeline
 
-    # -- metadata ----------------------------------------------------------
+    # Metadata
     def metrics(self) -> dict[str, Any]:
-        """Read metrics.json, refreshing only when the file changes."""
+        """Read metrics and refresh when the file changes."""
 
         path = Path(settings.METRICS_PATH)
         if not path.exists():
@@ -123,7 +117,7 @@ class ModelService:
         return copy.deepcopy(metrics)
 
     def model_info(self) -> dict[str, Any]:
-        """Public model metadata, with local filesystem paths removed."""
+        """Return model info without local file paths."""
 
         metrics = self.metrics()
         dataset = metrics.get("dataset")
@@ -142,7 +136,7 @@ class ModelService:
         }
         return metrics
 
-    # -- inference ---------------------------------------------------------
+    # Inference
     def predict_one(self, text: str) -> dict[str, Any]:
         pipeline = self._ensure_loaded()
         result = ml_predict.predict_text(pipeline, text, explain=True, top_n=8)
@@ -173,5 +167,5 @@ class ModelService:
         }
 
 
-#: Imported by views; a single instance per process.
+# One shared instance per worker.
 model_service = ModelService()

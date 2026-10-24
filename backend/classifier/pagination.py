@@ -1,4 +1,4 @@
-"""API pagination."""
+"""Shared API pagination."""
 
 from rest_framework.pagination import PageNumberPagination
 

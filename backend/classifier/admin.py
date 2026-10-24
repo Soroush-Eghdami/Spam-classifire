@@ -1,4 +1,4 @@
-"""Admin registration for quick inspection of prediction history."""
+"""Django admin view for prediction history."""
 
 from django.contrib import admin
 

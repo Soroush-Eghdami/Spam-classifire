@@ -7,8 +7,7 @@ from pathlib import Path
 
 
 def main() -> None:
-    # Make the repository root importable so ``ml`` can be loaded in dev even
-    # when this file is invoked from backend/.
+    # Let Django find the ml/ package from the repo root.
     project_root = Path(__file__).resolve().parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))

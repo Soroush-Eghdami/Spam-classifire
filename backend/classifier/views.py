@@ -1,4 +1,4 @@
-"""REST endpoints for the Sift classifier."""
+"""API endpoints for predictions, history, and health checks."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ def error_response(message: str, *, code: int, details: dict | None = None) -> R
 
 
 class PredictView(APIView):
-    """Classify one message and persist the result in history."""
+    """Classify one message and save it to history."""
 
     parser_classes = [JSONParser, FormParser, MultiPartParser]
     throttle_scope = "predict"
@@ -103,7 +103,7 @@ class PredictView(APIView):
 
 
 class BatchPredictView(APIView):
-    """Classify every row of an uploaded CSV in one vectorised call."""
+    """Classify every row in an uploaded CSV."""
 
     parser_classes = [MultiPartParser, FormParser]
     throttle_scope = "batch"
@@ -155,8 +155,7 @@ class BatchPredictView(APIView):
             )
         decoded = decoded.lstrip("\ufeff")
 
-        # Detect unquoted commas before pandas silently treats the first field
-        # as an index and truncates every message at its first comma.
+        # Catch rows with unquoted commas before pandas truncates them.
         try:
             rows = list(csv.reader(io.StringIO(decoded)))
         except csv.Error as exc:
@@ -290,7 +289,7 @@ class BatchPredictView(APIView):
 
 
 class HistoryView(generics.ListAPIView):
-    """Paginated prediction history with label/source/text filters."""
+    """Paginated history with label, source, and text filters."""
 
     serializer_class = PredictionSerializer
 
@@ -324,7 +323,7 @@ class HistoryView(generics.ListAPIView):
 
 
 class ModelInfoView(APIView):
-    """Model version, metrics, threshold, and training metadata."""
+    """Return model version, metrics, and training details."""
 
     @extend_schema(responses={200: dict})
     def get(self, request):
@@ -334,7 +333,7 @@ class ModelInfoView(APIView):
 
 
 class StatsView(APIView):
-    """Aggregate counters for the dashboard."""
+    """Return counters for the dashboard."""
 
     @extend_schema(responses={200: dict})
     def get(self, request):
@@ -380,7 +379,7 @@ class StatsView(APIView):
 
 
 class HealthView(APIView):
-    """Liveness/readiness check used by Docker and the frontend."""
+    """Health check used by Docker and the frontend."""
 
     @extend_schema(responses={200: dict, 503: dict})
     def get(self, request):
@@ -392,7 +391,7 @@ class HealthView(APIView):
             database_ok = False
 
         try:
-            model_service._ensure_loaded()  # noqa: SLF001 - health deliberately warms the cache
+            model_service._ensure_loaded()  # noqa: SLF001
             model_ok = True
             model_error = None
         except ModelNotReadyError as exc:
@@ -406,7 +405,7 @@ class HealthView(APIView):
             "model_loaded": model_ok,
             "model_version": status_payload.get("model_version"),
             "threshold": status_payload.get("threshold"),
-            "api_version": "2.0.0",
+            "api_version": "2.1.0",
             "response_ms": round((time.perf_counter() - started) * 1000, 1),
         }
         if model_error:

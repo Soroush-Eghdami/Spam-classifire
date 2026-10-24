@@ -1,21 +1,18 @@
-"""API tests.
-
-A tiny, cheap pipeline is trained once per test class so the suite does not
-depend on the real multi-megabyte artifact and stays fast.  The point is to
-test the web layer (validation, persistence, error shapes, pagination), not to
-re-validate model quality.
-"""
+"""Test the API with a small model built just for the suite."""
 
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from unittest import mock
 
 import joblib
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 from sklearn.linear_model import LogisticRegression
@@ -252,3 +249,31 @@ class ApiTestCase(APITestCase):
             self._predict("Free prize, act now!")
             self._predict("Meeting notes are attached.")
             self.assertEqual(load_mock.call_count, 1)
+
+
+class SettingsSecurityTests(SimpleTestCase):
+    def test_production_rejects_missing_or_placeholder_secret(self):
+        backend_dir = Path(__file__).resolve().parents[2]
+        project_root = backend_dir.parent
+        base_env = os.environ.copy()
+        base_env["DJANGO_DEBUG"] = "0"
+        base_env["PYTHONPATH"] = os.pathsep.join(
+            [str(project_root), base_env.get("PYTHONPATH", "")]
+        )
+
+        for secret in (None, "replace-with-a-long-random-string", "short"):
+            with self.subTest(secret=secret):
+                env = base_env.copy()
+                if secret is None:
+                    env.pop("DJANGO_SECRET_KEY", None)
+                else:
+                    env["DJANGO_SECRET_KEY"] = secret
+                result = subprocess.run(
+                    [sys.executable, "-c", "import config.settings"],
+                    cwd=backend_dir,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("DJANGO_SECRET_KEY", result.stderr)
