@@ -1,5 +1,4 @@
-# One command installs the full local development environment:
+# Install everything for local development:
 #   pip install -r requirements.txt
-# The backend pins the serving stack; ml/ adds notebook tooling.
 -r ml/requirements.txt
 -r backend/requirements.txt

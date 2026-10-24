@@ -1,22 +1,4 @@
-"""Feature engineering for the Sift spam classifier.
-
-Three views of every message are combined:
-
-1. **Word TF-IDF** (1-2 grams) captures phrases such as "act now", "click
-   here", "unclaimed prize".  Sublinear term frequency stops a single word
-   repeated a hundred times from dominating the vector.
-2. **Character TF-IDF** (3-5 grams, word-boundary aware) captures obfuscated
-   spam ("fr33 m0ney", "V1AGRA", "p@yout") and language-agnostic morphology.
-   It only looks at the first ``char_max_chars`` characters of a message to
-   keep the feature matrix small enough for a laptop.
-3. **Dense text statistics** capture signals that bag-of-words misses: link
-   density, shouting, digit runs, punctuation abuse, and keyword families
-   (urgency / money / marketing).
-
-Everything here is in a separate module (rather than inside the training
-script) because the fitted pipeline is pickled with joblib.  The backend must
-be able to import the exact same classes when it unpickles the artifact.
-"""
+"""Build text features for the spam model."""
 
 from __future__ import annotations
 
@@ -29,12 +11,28 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import FeatureUnion, Pipeline
 from sklearn.preprocessing import MaxAbsScaler
 
-#: Matches one or more characters that are not letters, digits, or whitespace.
+# Punctuation and other non-word characters.
 _NON_WORD_RE = re.compile(r"[^\w\s]")
-_URL_RE = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+_URL_RE = re.compile(r"(?:https?://|www\.)[^\s<>]+", re.IGNORECASE)
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
-_HTML_RE = re.compile(r"<[^>]{1,80}>")
+# The old corpus already split URLs into words like "http www site com".
+_URL_TOKEN_RE = re.compile(
+    r"(?<!\w)(?:https?|www|com|org|net|biz|edu|gov)(?!\w)",
+    re.IGNORECASE,
+)
+# Turn a split hostname into one token.
+_URL_SEQUENCE_RE = re.compile(
+    r"(?<!\w)urltoken(?:\s+[a-z0-9-]+){0,2}\s+urltoken(?!\w)",
+    re.IGNORECASE,
+)
+# Real HTML tags only. "<http://...>" is a URL, not a tag.
+_HTML_TAG_RE = re.compile(r"</?[a-zA-Z][a-zA-Z0-9]*(?:\s[^>]{0,300})?>")
 _REPEATED_PUNCT_RE = re.compile(r"[!?]{2,}")
+# The old dataset uses this placeholder for numbers.
+_ESCAPENUMBER_RE = re.compile(r"(?<!\w)escapenumber(?!\w)", re.IGNORECASE)
+# Standalone numbers, dates, and prices. Digits inside words (fr33) stay.
+_NUMBER_RE = re.compile(r"(?<!\w)\d+(?:[.,:/\-]\d+)*(?!\w)")
+_WHITESPACE_RE = re.compile(r"\s+")
 
 _URGENCY_WORDS = (
     "urgent", "urgently", "immediately", "act now", "limited time",
@@ -54,29 +52,69 @@ _MARKETING_WORDS = (
 )
 
 
-def normalize_text(text: object, max_chars: int = 20_000) -> str:
-    """Return a safe, whitespace-normalised string, truncated to a budget.
-
-    Newlines are preserved because :class:`TextStats` measures line counts.
-    Null bytes are removed because they break a few vectorizer regexes.
-    """
+def normalize_text(
+    text: object,
+    max_chars: int = 20_000,
+    *,
+    mask_numbers: bool = True,
+    lowercase: bool = True,
+) -> str:
+    """Clean raw text the same way for training and inference."""
 
     if text is None:
         return ""
-    value = str(text).replace("\x00", " ").replace("\r\n", "\n").replace("\r", "\n")
-    value = value.strip()
+    value = str(text).replace("\x00", " ")
+    if lowercase:
+        value = value.lower()
+    value = _ESCAPENUMBER_RE.sub(" ", value)
+    if mask_numbers:
+        value = _NUMBER_RE.sub(" ", value)
+    value = _URL_RE.sub(" urltoken ", value)
+    value = _EMAIL_RE.sub(" emailtoken ", value)
+    value = _URL_TOKEN_RE.sub(" urltoken ", value)
+    value = _URL_SEQUENCE_RE.sub(" urltoken ", value)
+    value = _HTML_TAG_RE.sub(" ", value)
+    value = _WHITESPACE_RE.sub(" ", value).strip()
     if len(value) > max_chars:
         value = value[:max_chars]
     return value
 
 
-class HeadText(BaseEstimator, TransformerMixin):
-    """Keep only the first ``max_chars`` characters of every document.
+class TextNormalizer(BaseEstimator, TransformerMixin):
+    """Clean text once before the feature steps see it."""
 
-    Character n-grams are expensive on long email threads.  The opening of a
-    message carries the subject line and the call to action, which is where
-    most obfuscated spam lives, so trimming the tail is a good trade.
-    """
+    def __init__(
+        self,
+        max_chars: int = 20_000,
+        mask_numbers: bool = True,
+        lowercase: bool = True,
+    ):
+        self.max_chars = max_chars
+        self.mask_numbers = mask_numbers
+        self.lowercase = lowercase
+
+    def fit(self, X: Sequence[str], y: object = None) -> "TextNormalizer":
+        return self
+
+    def transform(self, X: Sequence[str]) -> list[str]:
+        return [
+            normalize_text(
+                text,
+                self.max_chars,
+                mask_numbers=self.mask_numbers,
+                lowercase=self.lowercase,
+            )
+            for text in X
+        ]
+
+    def get_feature_names_out(self, input_features: Iterable[str] | None = None) -> np.ndarray:
+        if input_features is None:
+            return np.asarray([], dtype=object)
+        return np.asarray(list(input_features), dtype=object)
+
+
+class HeadText(BaseEstimator, TransformerMixin):
+    """Keep only the start of a message for the character model."""
 
     def __init__(self, max_chars: int = 4_000):
         self.max_chars = max_chars
@@ -94,21 +132,9 @@ class HeadText(BaseEstimator, TransformerMixin):
 
 
 class TextStats(BaseEstimator, TransformerMixin):
-    """Turn a message into a handful of dense, scale-free numeric signals.
-
-    The transformer is stateless, so it works inside a scikit-learn pipeline
-    without any fitting.  A :class:`StandardScaler` downstream makes the
-    columns comparable to one another.
-    """
+    """Optional content stats such as links, punctuation, and spam words."""
 
     FEATURE_NAMES: tuple[str, ...] = (
-        "log_chars",
-        "log_words",
-        "avg_word_len",
-        "max_word_len",
-        "unique_word_ratio",
-        "digit_ratio",
-        "uppercase_ratio",
         "punctuation_ratio",
         "non_ascii_ratio",
         "exclamation_per_kchar",
@@ -117,10 +143,6 @@ class TextStats(BaseEstimator, TransformerMixin):
         "percent_per_kchar",
         "url_count",
         "email_address_count",
-        "html_tag_count",
-        "number_token_ratio",
-        "caps_word_ratio",
-        "log_lines",
         "repeated_punctuation",
         "urgency_hits",
         "money_hits",
@@ -140,50 +162,27 @@ class TextStats(BaseEstimator, TransformerMixin):
     @staticmethod
     def _row(text: str) -> list[float]:
         chars = len(text)
-        words = text.split()
-        word_count = len(words)
         lowers = text.lower()
 
-        # Ratios use a +1 denominator so an empty message returns 0, not NaN.
+        # Avoid dividing by zero for empty messages.
         safe_chars = chars + 1
-        safe_words = word_count + 1
 
-        digits = sum(ch.isdigit() for ch in text)
-        uppers = sum(ch.isupper() for ch in text)
         non_ascii = sum(ord(ch) > 127 for ch in text)
         punctuation = sum(bool(_NON_WORD_RE.match(ch)) for ch in text)
-
-        word_lengths = [len(word) for word in words]
-        unique_words = {word.lower() for word in words}
-        number_tokens = sum(any(ch.isdigit() for ch in word) for word in words)
-        caps_words = sum(
-            1 for word in words if len(word) > 2 and word.isupper()
-        )
 
         urgency = sum(lowers.count(token) for token in _URGENCY_WORDS)
         money = sum(lowers.count(token) for token in _MONEY_WORDS)
         marketing = sum(lowers.count(token) for token in _MARKETING_WORDS)
 
         return [
-            np.log1p(chars),
-            np.log1p(word_count),
-            float(np.mean(word_lengths)) if word_lengths else 0.0,
-            float(max(word_lengths)) if word_lengths else 0.0,
-            len(unique_words) / safe_words,
-            digits / safe_chars,
-            uppers / safe_chars,
             punctuation / safe_chars,
             non_ascii / safe_chars,
             text.count("!") * 1000.0 / safe_chars,
             text.count("?") * 1000.0 / safe_chars,
             text.count("$") * 1000.0 / safe_chars,
             text.count("%") * 1000.0 / safe_chars,
-            float(len(_URL_RE.findall(text))),
-            float(len(_EMAIL_RE.findall(text))),
-            float(len(_HTML_RE.findall(text))),
-            number_tokens / safe_words,
-            caps_words / safe_words,
-            np.log1p(text.count("\n") + 1),
+            float(lowers.split().count("urltoken")),
+            float(lowers.split().count("emailtoken")),
             float(len(_REPEATED_PUNCT_RE.findall(text))),
             float(urgency),
             float(money),
@@ -203,8 +202,11 @@ def build_feature_union(
     char_min_df: int = 5,
     char_ngram_range: tuple[int, int] = (3, 5),
     char_max_chars: int = 4_000,
+    char_weight: float = 0.2,
+    include_stats: bool = False,
+    stats_weight: float = 0.1,
 ) -> FeatureUnion:
-    """Create the shared text feature space used by every candidate model."""
+    """Build the feature views used by the model."""
 
     word = TfidfVectorizer(
         analyzer="word",
@@ -234,29 +236,31 @@ def build_feature_union(
             ),
         ]
     )
-    stats = Pipeline(
-        steps=[
-            ("stats", TextStats()),
-            # MaxAbs keeps every statistic non-negative, which ComplementNB
-            # requires, while still putting the columns on a comparable scale.
-            ("scale", MaxAbsScaler()),
-        ]
-    )
+    transformer_list: list[tuple[str, BaseEstimator]] = [
+        ("word", word),
+        ("char", char),
+    ]
+    transformer_weights: dict[str, float] = {
+        "word": 1.0,
+        # Character patterns help with obfuscation, so keep them light.
+        "char": char_weight,
+    }
+
+    if include_stats:
+        stats = Pipeline(
+            steps=[
+                ("stats", TextStats()),
+                # Scale the columns so they are comparable.
+                ("scale", MaxAbsScaler()),
+            ]
+        )
+        transformer_list.append(("stats", stats))
+        transformer_weights["stats"] = stats_weight
 
     return FeatureUnion(
-        transformer_list=[
-            ("word", word),
-            ("char", char),
-            ("stats", stats),
-        ],
+        transformer_list=transformer_list,
         n_jobs=None,
-        transformer_weights={
-            "word": 1.0,
-            # Character n-grams are useful but correlated with the word view.
-            "char": 0.65,
-            # Hand-made signals should nudge, not dominate, the decision.
-            "stats": 0.35,
-        },
+        transformer_weights=transformer_weights,
     )
 
 
@@ -264,10 +268,11 @@ def build_pipeline(
     classifier: BaseEstimator,
     **feature_kwargs: object,
 ) -> Pipeline:
-    """Assemble the deployable ``features -> classifier`` pipeline."""
+    """Build the complete text -> classifier pipeline."""
 
     return Pipeline(
         steps=[
+            ("normalize", TextNormalizer()),
             ("features", build_feature_union(**feature_kwargs)),
             ("clf", classifier),
         ]

@@ -1,9 +1,4 @@
-"""Framework-agnostic inference: load a pipeline, predict, and explain.
-
-The Django backend imports only this module.  Keeping inference here means the
-model can be exercised from a shell or a notebook without Django installed,
-and any backend bug cannot masquerade as an ML bug.
-"""
+"""Load the model, score messages, and explain the result."""
 
 from __future__ import annotations
 
@@ -20,12 +15,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODEL_PATH = PROJECT_ROOT / "ml" / "artifacts" / "spam_pipeline.joblib"
 DEFAULT_METRICS_PATH = PROJECT_ROOT / "ml" / "artifacts" / "metrics.json"
 
-#: Keep inference consistent with how the model was trained.
+# Same limit used during training.
 MAX_TEXT_CHARS = 20_000
 
 
 def load_model(path: str | Path | None = None) -> Any:
-    """Load the fitted pipeline once and reuse it for every prediction."""
+    """Load the saved model."""
 
     model_path = Path(path) if path is not None else DEFAULT_MODEL_PATH
     if not model_path.exists():
@@ -37,7 +32,7 @@ def load_model(path: str | Path | None = None) -> Any:
 
 
 def load_metrics(path: str | Path | None = None) -> dict[str, Any]:
-    """Read the metrics sidecar written by the training script."""
+    """Load the metrics JSON written during training."""
 
     metrics_path = Path(path) if path is not None else DEFAULT_METRICS_PATH
     if not metrics_path.exists():
@@ -71,7 +66,7 @@ def predict_text(
     top_n: int = 8,
     explain: bool = True,
 ) -> dict[str, Any]:
-    """Classify one message and (optionally) explain the strongest signals."""
+    """Classify one message and optionally explain it."""
 
     cleaned = normalize_text(text, MAX_TEXT_CHARS)
     if not cleaned:
@@ -109,7 +104,7 @@ def predict_many(
     explain: bool = False,
     top_n: int = 6,
 ) -> list[dict[str, Any]]:
-    """Vectorised batch inference (one transform per file, not per row)."""
+    """Classify many messages in one batch."""
 
     cleaned = [normalize_text(text, MAX_TEXT_CHARS) for text in texts]
     cut = _threshold(model, threshold)

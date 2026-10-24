@@ -19,12 +19,7 @@ from sklearn.metrics import (
 
 
 def predict_scores(model: Any, texts: Any) -> np.ndarray:
-    """Return a continuous spam score in a model-agnostic way.
-
-    ``predict_proba`` is preferred (calibrated models and logistic
-    regression).  Raw margin-based models fall back to a sigmoid of their
-    decision function so the result is still bounded and comparable.
-    """
+    """Return a spam score from either predict_proba or decision_function."""
 
     if hasattr(model, "predict_proba"):
         probabilities = model.predict_proba(texts)
@@ -36,7 +31,7 @@ def predict_scores(model: Any, texts: Any) -> np.ndarray:
 
 
 def binary_metrics(y_true: Any, scores: np.ndarray, threshold: float = 0.5) -> dict[str, Any]:
-    """Full metric bundle for one threshold, with false positives called out."""
+    """Return the main metrics for one threshold."""
 
     y_true = np.asarray(y_true).astype(int)
     predictions = (scores >= threshold).astype(int)
@@ -59,37 +54,75 @@ def binary_metrics(y_true: Any, scores: np.ndarray, threshold: float = 0.5) -> d
     }
 
 
+def metrics_by_group(
+    y_true: Any,
+    scores: np.ndarray,
+    groups: Any,
+    threshold: float,
+) -> dict[str, dict[str, Any]]:
+    """Calculate metrics for each length/source slice."""
+
+    y_true = np.asarray(y_true).astype(int)
+    scores = np.asarray(scores, dtype=float)
+    groups = np.asarray(groups)
+
+    result: dict[str, dict[str, Any]] = {}
+    for group in sorted(set(groups.tolist())):
+        mask = groups == group
+        if not mask.any():
+            continue
+        result[str(group)] = binary_metrics(y_true[mask], scores[mask], threshold)
+    return result
+
+
+def length_bucket(length: int) -> str:
+    """Group messages into short, medium, and long buckets."""
+
+    if length < 160:
+        return "short (<160 chars)"
+    if length < 500:
+        return "medium (160-499 chars)"
+    return "long (500+ chars)"
+
+
 def choose_threshold(
     y_true: Any,
     scores: np.ndarray,
     *,
     beta: float = 0.5,
     grid_size: int = 400,
+    max_fpr: float | None = None,
 ) -> float:
-    """Pick the threshold that maximises F-beta on the validation set.
-
-    ``beta < 1`` weights precision above recall, which is the right trade-off
-    for spam filters: throwing away a real invoice is worse than letting one
-    junk message through.  Ties are broken toward the higher threshold (fewer
-    false positives).
-    """
+    """Pick the best threshold, with an optional false-positive cap."""
 
     y_true = np.asarray(y_true).astype(int)
     scores = np.asarray(scores, dtype=float)
 
-    # Candidate cut-offs come from the observed score distribution, not from
-    # the test set.  Interior quantiles keep the scan cheap on 8k+ rows.
+    # Use validation scores only; never tune on the test set.
     candidates = np.quantile(scores, np.linspace(0.01, 0.99, grid_size))
     candidates = np.unique(np.concatenate(([0.5], np.round(candidates, 4))))
 
     best_threshold = 0.5
     best_score = -1.0
+    fallback_threshold = float(candidates[-1])
+    fallback_fpr = float("inf")
     for threshold in candidates:
         predictions = (scores >= threshold).astype(int)
+        tn, fp, _, _ = confusion_matrix(y_true, predictions, labels=[0, 1]).ravel()
+        fpr = float(fp / (fp + tn)) if (fp + tn) else 0.0
+        if max_fpr is not None and fpr > max_fpr:
+            # Remember the safest option if the cap is too tight.
+            if fpr < fallback_fpr:
+                fallback_fpr = fpr
+                fallback_threshold = float(threshold)
+            continue
         score = fbeta_score(y_true, predictions, beta=beta, zero_division=0)
         if score > best_score or (score == best_score and threshold > best_threshold):
             best_score = float(score)
             best_threshold = float(threshold)
+
+    if best_score < 0.0:
+        return round(fallback_threshold, 4)
     return round(best_threshold, 4)
 
 
@@ -102,7 +135,7 @@ def _classifier(pipeline: Any) -> Any:
 
 
 def _coefficients(pipeline: Any) -> np.ndarray | None:
-    """Coefficients for plain linear models and their calibrated variants."""
+    """Get coefficients from a linear model or its calibrated version."""
 
     classifier = _classifier(pipeline)
     if hasattr(classifier, "coef_"):
@@ -119,7 +152,7 @@ def _coefficients(pipeline: Any) -> np.ndarray | None:
 
 
 def feature_names(pipeline: Any) -> np.ndarray | None:
-    """Human-readable feature names, e.g. ``word__free`` -> ``free``."""
+    """Turn raw pipeline names into readable feature names."""
 
     try:
         features = pipeline.named_steps["features"]
@@ -142,7 +175,7 @@ def feature_names(pipeline: Any) -> np.ndarray | None:
 
 
 def top_features(pipeline: Any, n: int = 20) -> dict[str, list[dict[str, Any]]]:
-    """Return the strongest spam and ham signals learned by the model."""
+    """Return the model's strongest spam and ham words."""
 
     coefficients = _coefficients(pipeline)
     names = feature_names(pipeline)
@@ -174,15 +207,11 @@ def top_feature_rows(
     threshold: float = 0.5,
     top_n: int = 8,
 ) -> list[list[dict[str, Any]]]:
-    """Per-document feature contributions (the explanation behind a label).
+    """Return the words that pushed each message toward spam or ham."""
 
-    Contribution = TF-IDF value x coefficient.  It answers "which words
-    pushed this particular message toward spam or ham?" rather than the
-    global "which words are spammy?" question answered by ``top_features``.
-    """
-
-    features = pipeline.named_steps["features"]
-    matrix = features.transform(texts)
+    # Use the same preprocessing as the classifier.
+    preprocessor = pipeline[:-1] if hasattr(pipeline, "__getitem__") else pipeline
+    matrix = preprocessor.transform(texts)
     coefficients = _coefficients(pipeline)
     names = feature_names(pipeline)
     if coefficients is None or names is None:
@@ -196,9 +225,7 @@ def top_feature_rows(
         values = matrix.data[start:end]
         contributions = values * coefficients[columns]
 
-        # Rank by absolute contribution so a ham explanation can surface the
-        # words that argued *against* spam (negative weights).  The UI colours
-        # by sign; the API keeps the signed number.
+        # Rank by absolute impact so negative (ham) signals can appear too.
         order = np.argsort(-np.abs(contributions))
         picked: list[int] = []
         for position in order:
