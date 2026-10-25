@@ -1,9 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// During local development the frontend calls /api and Vite proxies it to
-// Django.  In Docker, nginx does the same proxying.  Either way the browser
-// sees a single origin, so there is no CORS setup to remember.
+// Send /api calls to Django during local development.
 export default defineConfig({
   plugins: [react()],
   server: {

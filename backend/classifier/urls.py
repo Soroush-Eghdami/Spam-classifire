@@ -1,4 +1,4 @@
-"""URL routes for the classifier API."""
+"""Routes for the classifier API."""
 
 from django.urls import path
 

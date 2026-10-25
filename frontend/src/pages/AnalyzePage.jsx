@@ -252,7 +252,7 @@ export default function AnalyzePage({ navigate }) {
           <span className="process-step__index">01</span>
           <div>
             <h3>Two views of the text</h3>
-            <p>Word phrases and character fragments, plus link, caps, and urgency statistics.</p>
+            <p>Word phrases and character fragments. Numbers and URLs are normalized before scoring.</p>
           </div>
         </div>
         <div className="process-step">

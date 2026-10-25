@@ -1,4 +1,4 @@
-"""Shared, consistent error responses for the API."""
+"""Keep API errors in one consistent shape."""
 
 from __future__ import annotations
 
@@ -24,11 +24,7 @@ def _message_from_data(data: Any) -> str:
 
 
 def api_exception_handler(exc: Exception, context: dict[str, Any]):
-    """Wrap DRF errors as ``{"error": {...}}`` while preserving details.
-
-    A single error shape means the frontend needs one code path for every
-    failure: validation, throttling, not found, and server errors.
-    """
+    """Wrap DRF errors as `{"error": {...}}`."""
 
     response = exception_handler(exc, context)
     if response is None:

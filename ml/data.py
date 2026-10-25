@@ -1,25 +1,14 @@
-"""Data loading, cleaning, near-duplicate removal, and leak-free splitting.
-
-Spam corpora are notorious for duplicate messages: the same campaign email
-arrives in thousands of inboxes, and public datasets often contain the same
-message more than once.  If a near-identical copy lands in both the training
-and test set, the reported score is inflated and the model looks better than
-it is.  For that reason this module:
-
-1. normalises text,
-2. removes exact duplicates (after stripping punctuation / casing),
-3. removes *near* duplicates with a 64-bit SimHash and LSH banding,
-4. performs a stratified train / validation / test split **before** any
-   vectorizer is fitted.
-"""
+"""Load, clean, de-duplicate, and split the email data."""
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import re
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import numpy as np
 import pandas as pd
@@ -31,14 +20,14 @@ DEFAULT_DATA_PATH = PROJECT_ROOT / "combined_data.csv"
 _WORD_RE = re.compile(r"[a-z0-9]+")
 _STRIP_RE = re.compile(r"[^a-z0-9]+")
 
-#: Label spellings seen in public spam datasets, mapped to 0 / 1.
+# Common label spellings in public datasets.
 _HAM_LABELS = {"0", "ham", "not spam", "not-spam", "nonspam", "legit", "legitimate", "false"}
 _SPAM_LABELS = {"1", "spam", "spammy", "true", "yes"}
 
 
 @dataclass
 class Split:
-    """The three stratified folds used throughout training and evaluation."""
+    """Train, validation, and test data."""
 
     X_train: pd.Series
     y_train: pd.Series
@@ -46,6 +35,9 @@ class Split:
     y_val: pd.Series
     X_test: pd.Series
     y_test: pd.Series
+    source_train: pd.Series | None = None
+    source_val: pd.Series | None = None
+    source_test: pd.Series | None = None
 
     def summary(self) -> dict[str, int]:
         return {
@@ -57,18 +49,19 @@ class Split:
 
 @dataclass
 class Dataset:
-    """Cleaned dataset plus the audit trail of what cleaning removed."""
+    """Cleaned data and a summary of what cleaning removed."""
 
     X: pd.Series
     y: pd.Series
     stats: dict[str, Any] = field(default_factory=dict)
+    source: pd.Series | None = None
 
     def __len__(self) -> int:
         return len(self.X)
 
 
 def resolve_data_path(path: str | Path | None = None) -> Path:
-    """Find the dataset, accepting either an explicit path or the defaults."""
+    """Return an explicit dataset path, or find the default file."""
 
     if path is not None:
         candidate = Path(path)
@@ -85,6 +78,69 @@ def resolve_data_path(path: str | Path | None = None) -> Path:
     )
 
 
+def _load_extra_frame(path: str | Path) -> pd.DataFrame:
+    """Load an optional SMS/CSV file with label and text columns."""
+
+    source_path = Path(path)
+    if not source_path.exists():
+        raise FileNotFoundError(f"Extra dataset not found: {source_path}")
+
+    if source_path.suffix.lower() == ".zip":
+        with zipfile.ZipFile(source_path) as archive:
+            members = [
+                name
+                for name in archive.namelist()
+                if name.lower().endswith("smsspamcollection")
+            ]
+            if not members:
+                raise ValueError(
+                    f"{source_path} does not contain an SMSSpamCollection file"
+                )
+            with archive.open(members[0]) as handle:
+                return pd.read_csv(
+                    handle,
+                    sep="\t",
+                    header=None,
+                    names=["label", "text"],
+                    quoting=csv.QUOTE_NONE,
+                    encoding="utf-8",
+                )
+
+    frame = pd.read_csv(source_path)
+    if {"label", "text"}.issubset(frame.columns):
+        return frame[["label", "text"]]
+
+    return pd.read_csv(
+        source_path,
+        sep="\t",
+        header=None,
+        names=["label", "text"],
+        quoting=csv.QUOTE_NONE,
+        encoding="utf-8",
+    )
+
+
+def _prepare_frame(frame: pd.DataFrame, source: str, max_chars: int) -> pd.DataFrame:
+    """Normalize labels/text and drop empty rows."""
+
+    frame = frame.dropna(subset=["label", "text"]).copy()
+    frame["label"] = frame["label"].map(_normalise_label)
+    frame = frame.dropna(subset=["label"])
+    frame["label"] = frame["label"].astype(np.int8)
+    frame["text"] = (
+        frame["text"]
+        .astype(str)
+        .str.replace("\x00", " ", regex=False)
+        .str.replace("\r\n", "\n", regex=False)
+        .str.replace("\r", "\n", regex=False)
+        .str.strip()
+        .str.slice(0, max_chars)
+    )
+    frame = frame[frame["text"].str.len() >= 5].copy()
+    frame["source"] = source
+    return frame[["label", "text", "source"]]
+
+
 def _normalise_label(value: object) -> int | None:
     text = str(value).strip().lower()
     if text in _SPAM_LABELS:
@@ -99,17 +155,14 @@ def _normalise_label(value: object) -> int | None:
 
 
 def _fingerprint(text: str) -> bytes:
-    """Cheap exact-duplicate key: case, punctuation and spacing insensitive."""
+    """Make a simple duplicate key that ignores case and punctuation."""
 
     collapsed = _STRIP_RE.sub("", text.lower())
     return hashlib.blake2b(collapsed.encode("utf-8", "ignore"), digest_size=16).digest()
 
 
 def _simhash(text: str, max_words: int = 400) -> int:
-    """64-bit SimHash over word 3-shingles, implemented with numpy.
-
-    Documents with a Hamming distance of a few bits are near duplicates.
-    """
+    """Build a 64-bit SimHash so near-identical messages get similar values."""
 
     words = _WORD_RE.findall(text.lower())[:max_words]
     if not words:
@@ -148,12 +201,7 @@ def _drop_near_duplicates(
     max_distance: int = 3,
     bands: int = 4,
 ) -> np.ndarray:
-    """Return a boolean mask of documents that are not near duplicates.
-
-    Uses LSH banding so the comparison is close to linear instead of O(n^2).
-    With 4 bands of 16 bits, any pair within a Hamming distance of 3 is
-    guaranteed to share at least one band (pigeonhole principle).
-    """
+    """Mark messages to keep; LSH makes near-duplicate checks fast."""
 
     band_bits = 64 // bands
     band_mask = (1 << band_bits) - 1
@@ -170,7 +218,7 @@ def _drop_near_duplicates(
 
         duplicate = False
         for band, key in enumerate(keys):
-            for other in buckets[band].get(key, ()):  # candidate collisions only
+            for other in buckets[band].get(key, ()):  # only LSH collisions
                 if (fingerprint ^ kept_fingerprints[other]).bit_count() <= max_distance:
                     duplicate = True
                     break
@@ -192,6 +240,7 @@ def _drop_near_duplicates(
 def load_dataset(
     path: str | Path | None = None,
     *,
+    extra_data: Iterable[str | Path] | None = None,
     max_chars: int = 20_000,
     drop_near_duplicates: bool = True,
     near_dup_distance: int = 3,
@@ -199,38 +248,23 @@ def load_dataset(
     random_state: int = 42,
     verbose: bool = True,
 ) -> Dataset:
-    """Load ``combined_data.csv`` and return clean, de-duplicated text/labels.
-
-    Parameters
-    ----------
-    max_chars:
-        Hard cap per message.  Some emails in the corpus are ~600k characters;
-        keeping them would waste memory without adding vocabulary signal.
-    sample:
-        Optional row cap for quick experiments (sampled after cleaning).
-    """
+    """Load the main dataset, optionally add SMS data, then clean it."""
 
     data_path = resolve_data_path(path)
-    frame = pd.read_csv(data_path, usecols=["label", "text"])
-    rows_loaded = len(frame)
+    main_frame = pd.read_csv(data_path, usecols=["label", "text"])
+    rows_loaded = len(main_frame)
+    frame = _prepare_frame(main_frame, data_path.stem, max_chars)
 
-    frame = frame.dropna(subset=["label", "text"])
-    frame["label"] = frame["label"].map(_normalise_label)
-    frame = frame.dropna(subset=["label"])
-    frame["label"] = frame["label"].astype(np.int8)
+    extra_paths = [Path(item) for item in (extra_data or [])]
+    for extra_path in extra_paths:
+        extra_frame = _load_extra_frame(extra_path)
+        rows_loaded += len(extra_frame)
+        frame = pd.concat(
+            [frame, _prepare_frame(extra_frame, extra_path.stem, max_chars)],
+            ignore_index=True,
+        )
 
-    frame["text"] = (
-        frame["text"]
-        .astype(str)
-        .str.replace("\x00", " ", regex=False)
-        .str.replace("\r\n", "\n", regex=False)
-        .str.replace("\r", "\n", regex=False)
-        .str.strip()
-        .str.slice(0, max_chars)
-    )
-    frame = frame[frame["text"].str.len() >= 5]
-
-    # Exact duplicates: same text ignoring case, punctuation, and whitespace.
+    # Drop exact duplicates first.
     fingerprints = frame["text"].map(_fingerprint)
     exact_duplicate_mask = fingerprints.duplicated(keep="first")
     exact_duplicates = int(exact_duplicate_mask.sum())
@@ -251,10 +285,14 @@ def load_dataset(
         frame = frame.sample(n=sample, random_state=random_state).reset_index(drop=True)
 
     label_counts = frame["label"].value_counts().to_dict()
+    source_counts = frame["source"].value_counts().to_dict()
     lengths = frame["text"].str.len()
 
     stats: dict[str, Any] = {
-        "source": str(data_path),
+        # Keep local paths out of the committed metrics file.
+        "source": data_path.name,
+        "sources": {str(name): int(count) for name, count in source_counts.items()},
+        "extra_sources": [path.name for path in extra_paths],
         "rows_loaded": rows_loaded,
         "rows_clean": int(len(frame)),
         "exact_duplicates_removed": exact_duplicates,
@@ -278,8 +316,14 @@ def load_dataset(
             f"Labels: ham={stats['label_counts']['ham']:,} "
             f"spam={stats['label_counts']['spam']:,}"
         )
+        print(f"Sources: {stats['sources']}")
 
-    return Dataset(X=frame["text"], y=frame["label"], stats=stats)
+    return Dataset(
+        X=frame["text"],
+        y=frame["label"],
+        stats=stats,
+        source=frame["source"],
+    )
 
 
 def split_dataset(
@@ -289,32 +333,50 @@ def split_dataset(
     test_size: float = 0.1,
     random_state: int = 42,
 ) -> Split:
-    """Stratified 80/10/10 split created *before* fitting any transformer."""
+    """Make a stratified 80/10/10 split before fitting anything."""
 
     if val_size + test_size >= 1:
         raise ValueError("val_size + test_size must be less than 1")
 
-    X_train_val, X_test, y_train_val, y_test = train_test_split(
-        dataset.X,
-        dataset.y,
+    # Split row numbers so every column stays aligned.
+    indices = np.arange(len(dataset))
+    train_val_idx, test_idx = train_test_split(
+        indices,
         test_size=test_size,
         stratify=dataset.y,
         random_state=random_state,
     )
     relative_val_size = val_size / (1.0 - test_size)
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_train_val,
-        y_train_val,
+    train_idx, val_idx = train_test_split(
+        train_val_idx,
         test_size=relative_val_size,
-        stratify=y_train_val,
+        stratify=dataset.y.iloc[train_val_idx],
         random_state=random_state,
     )
 
+    def take(indices_for_part: np.ndarray) -> tuple[pd.Series, pd.Series, pd.Series | None]:
+        return (
+            dataset.X.iloc[indices_for_part].reset_index(drop=True),
+            dataset.y.iloc[indices_for_part].reset_index(drop=True),
+            (
+                dataset.source.iloc[indices_for_part].reset_index(drop=True)
+                if dataset.source is not None
+                else None
+            ),
+        )
+
+    X_train, y_train, source_train = take(train_idx)
+    X_val, y_val, source_val = take(val_idx)
+    X_test, y_test, source_test = take(test_idx)
+
     return Split(
-        X_train=X_train.reset_index(drop=True),
-        y_train=y_train.reset_index(drop=True),
-        X_val=X_val.reset_index(drop=True),
-        y_val=y_val.reset_index(drop=True),
-        X_test=X_test.reset_index(drop=True),
-        y_test=y_test.reset_index(drop=True),
+        X_train=X_train,
+        y_train=y_train,
+        X_val=X_val,
+        y_val=y_val,
+        X_test=X_test,
+        y_test=y_test,
+        source_train=source_train,
+        source_val=source_val,
+        source_test=source_test,
     )

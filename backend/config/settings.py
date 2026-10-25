@@ -1,8 +1,4 @@
-"""Django settings for the Sift backend.
-
-Everything that changes between local development, Docker, and a real
-deployment is read from environment variables with safe local defaults.
-"""
+"""Django settings. Environment variables override the local defaults."""
 
 from __future__ import annotations
 
@@ -10,12 +6,12 @@ import os
 import sys
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BASE_DIR.parent
 
-# The model lives in /ml, outside the Django project.  Putting the repository
-# root on sys.path lets the backend import the exact classes used at training
-# time when joblib unpickles the pipeline.
+# Add the repo root so the backend can import ml/.
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -32,8 +28,23 @@ def env_list(name: str, default: str = "") -> list[str]:
     return [item.strip() for item in env(name, default).split(",") if item.strip()]
 
 
-SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-only-change-me-in-production-2e3a2f")
+_DEV_SECRET_KEY = "dev-only-change-me-in-production-2e3a2f"
+_KNOWN_INSECURE_SECRETS = {
+    _DEV_SECRET_KEY,
+    "insecure-dev-key-change-me",
+    "replace-with-a-long-random-string",
+}
+SECRET_KEY = env("DJANGO_SECRET_KEY", _DEV_SECRET_KEY)
 DEBUG = env_bool("DJANGO_DEBUG", True)
+
+# Production must use a real secret key.
+if not DEBUG and (SECRET_KEY in _KNOWN_INSECURE_SECRETS or len(SECRET_KEY) < 32):
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY must be set to a unique value of at least 32 characters "
+        "when DJANGO_DEBUG=0. Generate one with: "
+        "python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+    )
+
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,backend,0.0.0.0")
 
 INSTALLED_APPS = [
@@ -113,21 +124,17 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# ---------------------------------------------------------------------------
-# ML model
-# ---------------------------------------------------------------------------
+# Model files
 MODEL_PATH = Path(env("MODEL_PATH", str(PROJECT_ROOT / "ml" / "artifacts" / "spam_pipeline.joblib")))
 METRICS_PATH = Path(env("METRICS_PATH", str(PROJECT_ROOT / "ml" / "artifacts" / "metrics.json")))
 
-# API limits: defence against oversized payloads and accidental DoS.
+# Keep request sizes under control.
 MAX_TEXT_CHARS = int(env("MAX_TEXT_CHARS", "20000"))
 MAX_BATCH_ROWS = int(env("MAX_BATCH_ROWS", "500"))
 MAX_BATCH_FILE_MB = int(env("MAX_BATCH_FILE_MB", "5"))
 MAX_PREVIEW_CHARS = 280
 
-# ---------------------------------------------------------------------------
-# Django REST Framework
-# ---------------------------------------------------------------------------
+# API
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     "DEFAULT_AUTHENTICATION_CLASSES": [],
@@ -155,18 +162,16 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "Sift Spam Classification API",
     "DESCRIPTION": (
-        "Classical ML spam classifier: TF-IDF (word + character n-grams) and "
-        "text statistics feeding a linear model. Single and batch prediction, "
-        "history, model metadata, and health checks."
+        "Spam classifier using word and character TF-IDF with logistic "
+        "regression. Supports single and batch prediction, history, model "
+        "metadata, and health checks."
     ),
-    "VERSION": "2.0.0",
+    "VERSION": "2.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
 }
 
-# ---------------------------------------------------------------------------
-# CORS (only needed for the Vite dev server; Docker serves same-origin)
-# ---------------------------------------------------------------------------
+# CORS for the local Vite dev server
 CORS_ALLOWED_ORIGINS = env_list(
     "CORS_ALLOWED_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",

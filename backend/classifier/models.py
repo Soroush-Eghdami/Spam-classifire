@@ -1,4 +1,4 @@
-"""Database model for prediction history."""
+"""Database model for saved predictions."""
 
 from __future__ import annotations
 
@@ -7,12 +7,7 @@ from django.utils import timezone
 
 
 class Prediction(models.Model):
-    """One classified message.
-
-    Only a short preview of the message is stored.  Full emails can contain
-    personal data and are not needed to show history, so the API deliberately
-    keeps just enough context for a human to recognise the row.
-    """
+    """One classified message. Only a short preview is stored."""
 
     SOURCE_SINGLE = "single"
     SOURCE_BATCH = "batch"

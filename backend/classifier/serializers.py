@@ -1,4 +1,4 @@
-"""Serializers for requests, prediction history, and model metadata."""
+"""Serializers for requests and prediction history."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from classifier.models import Prediction
 
 
 class PredictRequestSerializer(serializers.Serializer):
-    """Validate a single message before it ever reaches the model."""
+    """Validate one message before it reaches the model."""
 
     text = serializers.CharField(
         required=True,
@@ -31,7 +31,7 @@ class PredictRequestSerializer(serializers.Serializer):
 
 
 class BatchUploadSerializer(serializers.Serializer):
-    """Multipart form used by the batch endpoint (for schema generation)."""
+    """Form used by the batch upload endpoint."""
 
     file = serializers.FileField(help_text="CSV file, maximum 5 MB and 500 rows.")
     text_column = serializers.CharField(
@@ -60,7 +60,7 @@ class PredictionSerializer(serializers.ModelSerializer):
 
 
 class PredictionResultSerializer(serializers.Serializer):
-    """Response contract for ``POST /api/predict/``."""
+    """Response shape for `POST /api/predict/`."""
 
     id = serializers.IntegerField()
     label = serializers.ChoiceField(choices=["spam", "ham"])

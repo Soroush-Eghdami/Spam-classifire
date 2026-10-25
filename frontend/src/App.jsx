@@ -69,7 +69,7 @@ function useTheme() {
     try {
       localStorage.setItem("sift-theme", theme);
     } catch {
-      /* private mode: ignore */
+      /* Storage may be blocked. */
     }
   }, [theme]);
 
@@ -145,7 +145,7 @@ function Sidebar({ page, navigate, health, theme, setTheme }) {
           </div>
           <p className="api-card__meta">
             {health.state === "online"
-              ? `v${health.version || "2.0.0"} · cut-off ${(Number(health.threshold || 0.5) * 100).toFixed(0)}%`
+              ? `v${health.version || "2.1.0"} · cut-off ${(Number(health.threshold || 0.5) * 100).toFixed(0)}%`
               : health.state === "offline"
                 ? "Start Django on port 8000."
                 : "Pinging the classifier…"}
@@ -270,7 +270,7 @@ export default function App() {
 
             <footer className="footer">
               <span>Sift · classical ML spam triage</span>
-              <span className="footer__meta">TF-IDF + text statistics · Django REST · React</span>
+              <span className="footer__meta">Word + character TF-IDF · Django REST · React</span>
             </footer>
           </div>
         </main>

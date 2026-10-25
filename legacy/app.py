@@ -2,24 +2,22 @@ import pandas as pd
 import streamlit as st
 import joblib
 
-# === Load trained model and vectorizer ===
+# Load the saved model and vectorizer once.
 @st.cache_resource
 def load_model():
-    # Load the pre-trained model and vectorizer
     model = joblib.load("spam_classifier_learning.pkl")
     vectorizer = joblib.load("spam_vectorizer.pkl")
     return model, vectorizer
 
-# === Load model and vectorizer ===
 model, vectorizer = load_model()
 
-# === File Uploader ===
+# CSV upload
 uploaded_file = st.file_uploader("📁 Choose a CSV file", type=["csv"])
 
-# === User Input Text Area ===
+# Single message input
 user_email = st.text_area("✉️ Enter your email content for prediction:")
 
-# === Handle CSV Input ===
+# Handle the CSV
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
     st.write("📄 Uploaded CSV Columns:", df.columns.tolist())
@@ -43,7 +41,7 @@ if uploaded_file is not None:
         st.success("✅ Predictions generated from uploaded file.")
         st.write(df)
 
-# === Handle User Text Input ===
+# Handle the text box
 if user_email:
     X_input = vectorizer.transform([user_email])
     prediction = model.predict(X_input)[0]

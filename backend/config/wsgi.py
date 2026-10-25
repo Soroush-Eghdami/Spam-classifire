@@ -1,4 +1,4 @@
-"""WSGI entry point used by gunicorn in Docker."""
+"""WSGI entry point used by gunicorn."""
 
 import os
 

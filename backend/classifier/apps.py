@@ -1,4 +1,4 @@
-"""App configuration.  The model is loaded lazily on the first prediction."""
+"""App setup. The model loads on the first prediction."""
 
 from __future__ import annotations
 
@@ -15,9 +15,7 @@ class ClassifierConfig(AppConfig):
     verbose_name = "Spam classifier"
 
     def ready(self) -> None:
-        # Importing services here validates that ml/ is importable without
-        # paying the cost of loading a multi-megabyte joblib artifact at
-        # startup.  Gunicorn workers load the model on their first request.
+        # Check imports now, but wait to load the large model file.
         from django.conf import settings
 
         from classifier import services

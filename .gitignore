@@ -7,13 +7,15 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 
-# Data: the combined corpus is far too large for GitHub
+# Datasets are too large for Git.
 combined_data.csv
 data/
 *.sqlite3
 db.sqlite3
+test_emails.csv
+sift-batch-results.csv
 
-# Model logs (the small production artifact and metrics ARE tracked)
+# Logs only; the model and metrics are tracked.
 ml/artifacts/*.log
 *.log
 
@@ -35,5 +37,5 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Internal planning document
+# Local planning notes
 build_plan.md
