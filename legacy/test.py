@@ -16,20 +16,20 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import joblib
 import random
 
-# Download necessary NLTK data
+# Download NLTK data.
 nltk.download('stopwords')
 nltk.download('wordnet')
 nltk.download('omw-1.4')
 
-# Load dataset
+# Load the dataset.
 df = pd.read_csv("spam.csv", encoding='latin-1')
 df = df[['Category', 'Message']]
 df['Category'] = df['Category'].map({'ham': 0, 'spam': 1})
 
-# Shuffle the dataset
+# Shuffle the rows.
 df = df.sample(frac=1, random_state=42).reset_index(drop=True)
 
-# Text preprocessing
+# Clean the message text.
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
@@ -42,12 +42,12 @@ def preprocess_text(text):
 
 df['Cleaned'] = df['Message'].apply(preprocess_text)
 
-# TF-IDF Vectorization
+# Turn text into TF-IDF vectors.
 vectorizer = TfidfVectorizer()
 X = vectorizer.fit_transform(df['Cleaned'])
 y = df['Category']
 
-# === 60-20-20 Data Split ===
+# Split the data 60/20/20.
 X_temp, X_test, y_temp, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42, stratify=y)
 
@@ -58,7 +58,7 @@ print(f"Train size: {X_train.shape[0]}")
 print(f"Reinforcement size: {X_reinforce.shape[0]}")
 print(f"Test size: {X_test.shape[0]}")
 
-# === MODEL SELECTION BASED ON CROSS-VALIDATION ===
+# Compare models with cross-validation.
 models = {
     'Logistic Regression': LogisticRegression(max_iter=1000),
     'Naive Bayes': MultinomialNB(),
@@ -83,7 +83,7 @@ for name, model in models.items():
 
 print(f"\n✅ Best model selected: {best_model} (Accuracy: {best_score:.4f})")
 
-# === INITIAL TRAINING WITH REPEATED FITTING (3 rounds) ===
+# Fit the best model on the training split.
 selected_model = models[best_model]
 
 print("\nTraining model on 60% data (3 rounds)...")
@@ -91,7 +91,7 @@ for i in range(3):
     selected_model.fit(X_train, y_train)
     print(f"Round {i+1}/3 completed.")
 
-# === INITIAL EVALUATION ===
+# Check the first result.
 y_pred_initial = selected_model.predict(X_test)
 print("\nInitial Evaluation on Test Set (After 60% Training):")
 print(f"R² Score: {r2_score(y_test, y_pred_initial):.4f}")
@@ -102,21 +102,21 @@ print(classification_report(y_test, y_pred_initial))
 print("Confusion Matrix:")
 print(confusion_matrix(y_test, y_pred_initial))
 
-# === REINFORCEMENT LEARNING (extra 20%) ===
+# Add the last 20% of the data.
 print("\nReinforcing model with additional 20% data...")
 
 X_train_combined = np.vstack((X_train.toarray(), X_reinforce.toarray()))
 y_train_combined = np.concatenate((y_train, y_reinforce))
 
-# === Add noise to a small fraction of reinforcement data ===
-num_noisy = int(0.05 * len(y_reinforce))  # 5% noise
+# Flip a few labels as noise.
+num_noisy = int(0.05 * len(y_reinforce))
 noise_indices = random.sample(range(len(y_train_combined)), num_noisy)
 for idx in noise_indices:
-    y_train_combined[idx] = 1 - y_train_combined[idx]  # flip label
+    y_train_combined[idx] = 1 - y_train_combined[idx]
 
 selected_model.fit(X_train_combined, y_train_combined)
 
-# === FINAL EVALUATION ===
+# Check the final result.
 y_pred_final = selected_model.predict(X_test)
 print("\nFinal Evaluation on Test Set (After Reinforcement with 20%):")
 print(f"R² Score: {r2_score(y_test, y_pred_final):.4f}")
@@ -127,7 +127,7 @@ print(classification_report(y_test, y_pred_final))
 print("Confusion Matrix:")
 print(confusion_matrix(y_test, y_pred_final))
 
-# === SAVE FINAL MODEL ===
+# Save the model and vectorizer.
 print("\nSaving final model and vectorizer...")
 joblib.dump(selected_model, "spam_classifier_learning.pkl")
 joblib.dump(vectorizer, "spam_vectorizer.pkl")
