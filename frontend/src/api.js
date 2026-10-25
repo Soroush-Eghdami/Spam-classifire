@@ -1,5 +1,4 @@
-// Single place for every network call. If an endpoint changes, only this
-// file needs to change; components never build URLs themselves.
+// All network calls live here.
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 

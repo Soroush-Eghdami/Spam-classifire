@@ -1,9 +1,9 @@
-# Multi-stage build: compile the React app, then serve the static bundle with nginx.
+# Build the React app, then serve it with nginx.
 FROM node:22-alpine AS build
 
 WORKDIR /app
 
-# Dependency layer first so source edits do not reinstall node_modules.
+# Install dependencies before copying the source.
 COPY package.json package-lock.json ./
 RUN npm ci
 

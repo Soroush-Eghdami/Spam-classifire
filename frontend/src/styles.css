@@ -1,10 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..700&family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=JetBrains+Mono:wght@400;500&display=swap");
 
-/* ==========================================================================
-   Design tokens — the palette is shared by both themes
-   Light: forest / moss / sand / terracotta / cream
-   Dark:  deep green surfaces with soft terracotta accents
-   ========================================================================== */
+/* Colors shared by both themes */
 
 :root {
   --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -73,9 +69,7 @@
   --grid-line: rgba(46, 58, 47, 0.06);
 }
 
-/* ==========================================================================
-   Base
-   ========================================================================== */
+/* Base styles */
 
 * {
   box-sizing: border-box;
@@ -169,9 +163,7 @@ kbd,
   border: 0;
 }
 
-/* ==========================================================================
-   Shell and navigation
-   ========================================================================== */
+/* App shell and navigation */
 
 .app-shell {
   display: grid;
@@ -430,9 +422,7 @@ kbd,
   display: none;
 }
 
-/* ==========================================================================
-   Main layout
-   ========================================================================== */
+/* Page layout */
 
 .main {
   min-width: 0;
@@ -547,9 +537,7 @@ kbd,
   letter-spacing: 0.02em;
 }
 
-/* ==========================================================================
-   Buttons & form controls
-   ========================================================================== */
+/* Buttons and form controls */
 
 .primary-button,
 .ghost-button {
@@ -658,9 +646,7 @@ kbd {
   font-size: 10px;
 }
 
-/* ==========================================================================
-   Analyze page
-   ========================================================================== */
+/* Analyze page */
 
 .analyze-grid {
   display: grid;
@@ -1365,9 +1351,7 @@ kbd {
   max-width: 34ch;
 }
 
-/* ==========================================================================
-   Batch page
-   ========================================================================== */
+/* Batch page */
 
 .batch-layout {
   display: grid;
@@ -1824,9 +1808,7 @@ kbd {
   animation: shimmer 1.6s linear infinite;
 }
 
-/* ==========================================================================
-   History drawer
-   ========================================================================== */
+/* History drawer */
 
 .drawer-layer {
   position: fixed;
@@ -1965,9 +1947,7 @@ kbd {
   color: var(--text-soft);
 }
 
-/* ==========================================================================
-   Model page
-   ========================================================================== */
+/* Model page */
 
 .loading-card {
   display: flex;
@@ -2496,9 +2476,7 @@ kbd {
   color: var(--moss);
 }
 
-/* ==========================================================================
-   Empty states, toasts, footer
-   ========================================================================== */
+/* Empty states, toasts, and footer */
 
 .empty-state {
   display: flex;
@@ -2621,9 +2599,7 @@ kbd {
   color: color-mix(in srgb, var(--muted) 75%, transparent);
 }
 
-/* ==========================================================================
-   Responsive
-   ========================================================================== */
+/* Responsive layout */
 
 @media (max-width: 1180px) {
   .main__inner {
@@ -2953,9 +2929,7 @@ kbd {
   }
 }
 
-/* ==========================================================================
-   Motion
-   ========================================================================== */
+/* Motion */
 
 @keyframes spin {
   to { transform: rotate(360deg); }

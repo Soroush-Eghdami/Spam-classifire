@@ -86,6 +86,40 @@ function ConfusionMatrix({ matrix }) {
   );
 }
 
+function ExternalCard({ external }) {
+  const metrics = external?.at_tuned_threshold;
+  const dataset = external?.dataset;
+  if (!metrics) return null;
+
+  return (
+    <section className="card table-card">
+      <div className="section-heading">
+        <h2>External check</h2>
+        <span>SpamAssassin · not used for tuning</span>
+      </div>
+      <div className="dataset-figures">
+        <div>
+          <span className="dataset-figures__value">{percent(metrics.precision)}</span>
+          <span className="dataset-figures__label">precision</span>
+        </div>
+        <div>
+          <span className="dataset-figures__value">{percent(metrics.recall)}</span>
+          <span className="dataset-figures__label">recall</span>
+        </div>
+        <div>
+          <span className="dataset-figures__value">{percent(metrics.false_positive_rate, 2)}</span>
+          <span className="dataset-figures__label">false-positive rate</span>
+        </div>
+      </div>
+      <p className="table-note">
+        {integer(dataset?.label_counts?.spam)} spam and {integer(dataset?.label_counts?.ham)} ham messages from a
+        separate public corpus. The external result is reported honestly and was not used for model selection or
+        threshold tuning.
+      </p>
+    </section>
+  );
+}
+
 function DatasetCard({ dataset, split }) {
   if (!dataset) return null;
   const total = dataset.label_counts?.ham + dataset.label_counts?.spam || 1;
@@ -172,7 +206,6 @@ export default function ModelPage({ health }) {
   const matrix = info?.confusion_matrix || metrics?.confusion_matrix;
   const comparison = info?.comparison || [];
   const model = info?.model;
-  const features = info?.features;
 
   return (
     <div className="page page--model">
@@ -228,7 +261,7 @@ export default function ModelPage({ health }) {
                 </div>
               </div>
               <p className="model-hero__copy">
-                {familyLabel(model.family)} over word and character TF-IDF plus hand-built message statistics.
+                {familyLabel(model.family)} over word and character TF-IDF. No length or style statistics.
                 Trained {dateOnly(info.trained_at)} in {fixed(info.training_seconds / 60, 1)} minutes.
               </p>
 
@@ -256,7 +289,6 @@ export default function ModelPage({ health }) {
                 <div className="architecture__row">
                   <span>word TF-IDF</span>
                   <span>char TF-IDF</span>
-                  <span>stats</span>
                 </div>
                 <div className="architecture__row architecture__row--flow">
                   <i className="architecture__arrow">→</i>
@@ -275,6 +307,8 @@ export default function ModelPage({ health }) {
             <DatasetCard dataset={info.dataset} split={info.split} />
           </div>
 
+          <ExternalCard external={info.external} />
+
           <div className="model-grid model-grid--features">
             <div className="card feature-card">
               <div className="section-heading">
@@ -282,7 +316,7 @@ export default function ModelPage({ health }) {
                 <span>global coefficients</span>
               </div>
               <SignalChips words={(info.top_features?.spam || []).slice(0, 12)} />
-              <p className="feature-card__note">Positive weights push a message toward spam. Character patterns are marked <em>char</em>; hand-built features are marked <em>stat</em>.</p>
+              <p className="feature-card__note">Positive weights push a message toward spam. Character patterns are marked <em>char</em>.</p>
             </div>
 
             <div className="card feature-card">
@@ -291,14 +325,14 @@ export default function ModelPage({ health }) {
                 <span>global coefficients</span>
               </div>
               <SignalChips words={(info.top_features?.ham || []).slice(0, 12)} />
-              <p className="feature-card__note">Negative weights pull a message back toward legitimate mail — things like meeting, thanks, and project vocabulary.</p>
+              <p className="feature-card__note">Negative weights pull a message back toward legitimate mail.</p>
             </div>
           </div>
 
           <section className="card table-card">
             <div className="section-heading">
               <h2>Model comparison</h2>
-              <span>validation split · chosen by PR-AUC</span>
+              <span>validation split · PR-AUC + parsimony</span>
             </div>
             <div className="table-scroll">
               <table className="data-table comparison-table">
@@ -363,12 +397,6 @@ export default function ModelPage({ health }) {
               <p className="note-card__copy">
                 The artifact and <code>metrics.json</code> land in <code>ml/artifacts/</code>. Restart or refresh the backend to serve a new model.
               </p>
-              <div className="feature-tags">
-                {(features?.text_stats || []).slice(0, 8).map((name) => (
-                  <span key={name}>{String(name).replaceAll("_", " ")}</span>
-                ))}
-                {features?.text_stats?.length > 8 ? <span>+{features.text_stats.length - 8} more</span> : null}
-              </div>
               <a className="text-link" href="/api/schema/" target="_blank" rel="noreferrer">
                 <DownloadIcon size={15} /> OpenAPI schema <ArrowRightIcon size={14} />
               </a>
